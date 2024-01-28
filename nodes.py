@@ -651,7 +651,10 @@ class SDParameterGenerator:
     MODEL_SCALING_FACTOR = {
         "SDv1 512px": 1.0,
         "SDv2 768px": 1.5,
-        "SDXL 1024px": 2.0,
+        "SDXL 1x": 2.0,
+        "SDXL 1.1x": 2.2,
+        "SDXL 1.25x": 2.5,
+        "SDXL 1.5x": 3.0,
     }
 
     DEFAULT_ASPECT_RATIO_DISPLAY = list(
@@ -662,8 +665,14 @@ class SDParameterGenerator:
                 f"{int(x[1][1]*scaling_factor['SDv1 512px'])} | "
                 f"{int(x[1][0]*scaling_factor['SDv2 768px'])}x"
                 f"{int(x[1][1]*scaling_factor['SDv2 768px'])} | "
-                f"{int(x[1][0]*scaling_factor['SDXL 1024px'])}x"
-                f"{int(x[1][1]*scaling_factor['SDXL 1024px'])}"
+                f"{int(x[1][0]*scaling_factor['SDXL 1x'])}x"
+                f"{int(x[1][1]*scaling_factor['SDXL 1x'])}"
+                f"{int(x[1][0] * scaling_factor['SDXL 1.1x'])}x"
+                f"{int(x[1][1] * scaling_factor['SDXL 1.1x'])}"
+                f"{int(x[1][0] * scaling_factor['SDXL 1.25x'])}x"
+                f"{int(x[1][1] * scaling_factor['SDXL 1.25x'])}"
+                f"{int(x[1][0] * scaling_factor['SDXL 1.5x'])}x"
+                f"{int(x[1][1] * scaling_factor['SDXL 1.5x'])}"
             ),
             ASPECT_RATIO_MAP.items(),
         )
