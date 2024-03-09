@@ -30,7 +30,6 @@ import folder_paths
 
 from .stable_diffusion_prompt_reader.sd_prompt_reader.constants import (
     SUPPORTED_FORMATS,
-    MESSAGE,
 )
 from .stable_diffusion_prompt_reader.sd_prompt_reader.image_data_reader import (
     ImageDataReader,
@@ -44,6 +43,15 @@ from .stable_diffusion_prompt_reader.sd_prompt_reader.__version__ import (
 BLUE = "\033[1;34m"
 CYAN = "\033[36m"
 RESET = "\033[0m"
+
+ERROR_MESSAGE = {
+    "format_error": "No data detected or unsupported format. "
+    "Please see the README for more details.\n"
+    "https://github.com/receyuki/comfyui-prompt-reader-node#supported-formats",
+    "complex_workflow": "The workflow is overly complex, or unsupported custom nodes have been used. "
+    "Please see the README for more details.\n"
+    "https://github.com/receyuki/comfyui-prompt-reader-node#prompt-reader-node",
+}
 
 
 def output_to_terminal(text: str):
@@ -133,6 +141,8 @@ class SDPromptReader:
     def load_image(self, image, parameter_index):
         if image in SDPromptReader.files:
             image_path = folder_paths.get_annotated_filepath(image)
+        elif image.startswith("pasted/"):
+            image_path = folder_paths.get_annotated_filepath(image)
         else:
             image_path = image
         i = Image.open(image_path)
@@ -148,15 +158,30 @@ class SDPromptReader:
 
         file_path = Path(image_path)
 
-        if file_path.suffix not in SUPPORTED_FORMATS:
-            output_to_terminal(MESSAGE["suffix_error"][1])
-            raise ValueError(MESSAGE["suffix_error"][1])
-
         with open(file_path, "rb") as f:
-            image_data = ImageDataReader(f)
+            try:
+                image_data = ImageDataReader(f)
+            except:
+                output_to_terminal(ERROR_MESSAGE["complex_workflow"])
+                return self.error_output(
+                    error_message=ERROR_MESSAGE["complex_workflow"],
+                    image=image,
+                    mask=mask,
+                    width=i.width,
+                    height=i.height,
+                    filename=file_path.stem,
+                )
+
             if not image_data.tool:
-                output_to_terminal(MESSAGE["format_error"][1])
-                raise ValueError(MESSAGE["format_error"][1])
+                output_to_terminal(ERROR_MESSAGE["format_error"])
+                return self.error_output(
+                    error_message=ERROR_MESSAGE["format_error"],
+                    image=image,
+                    mask=mask,
+                    width=i.width,
+                    height=i.height,
+                    filename=file_path.stem,
+                )
 
             seed = int(
                 self.param_parser(image_data.parameter.get("seed", 0), parameter_index)
@@ -235,6 +260,28 @@ class SDPromptReader:
 
         return model
 
+    @staticmethod
+    def error_output(
+        error_message, image=None, mask=None, width=0, height=0, filename=""
+    ):
+        return {
+            "ui": {"text": ("", "", error_message)},
+            "result": (
+                image,
+                mask,
+                "",
+                "",
+                0,
+                0,
+                0.0,
+                width,
+                height,
+                "",
+                filename,
+                "",
+            ),
+        }
+
     @classmethod
     def IS_CHANGED(s, image, parameter_index):
         if image in SDPromptReader.files:
@@ -244,6 +291,10 @@ class SDPromptReader:
         with open(Path(image_path), "rb") as f:
             image_data = ImageDataReader(f)
         return image_data.props
+
+    @classmethod
+    def VALIDATE_INPUTS(s, image):
+        return True
 
 
 class SDPromptSaver:
@@ -316,7 +367,7 @@ class SDPromptSaver:
                 ),
                 "positive": ("STRING", {"default": "", "multiline": True}),
                 "negative": ("STRING", {"default": "", "multiline": True}),
-                "extension": (["png", "jpg", "webp"],),
+                "extension": (["png", "jpg", "jpeg", "webp"],),
                 "calculate_hash": ("BOOLEAN", {"default": True}),
                 "resource_hash": ("BOOLEAN", {"default": True}),
                 "lossless_webp": ("BOOLEAN", {"default": True}),
@@ -408,7 +459,7 @@ class SDPromptSaver:
                 "%steps": steps,
                 "%cfg": cfg,
                 "%extension": extension,
-                "%model": model_name_real,
+                "%model": Path(model_name_real).stem,
                 "%sampler": sampler_name_real,
                 "%scheduler": scheduler_real,
                 "%quality": jpg_webp_quality,
@@ -552,7 +603,14 @@ class SDPromptSaver:
             output_to_terminal("Saved file: " + str(file))
             comments.append(comment)
 
-        return {"ui": {"images": results}, "result": (files, file_paths, comments)}
+        return {
+            "ui": {"images": results},
+            "result": (
+                self.unpack_singleton(files),
+                self.unpack_singleton(file_paths),
+                self.unpack_singleton(comments),
+            ),
+        }
 
     @staticmethod
     def calculate_hash(name, hash_type):
@@ -633,6 +691,10 @@ class SDPromptSaver:
             return SDPromptSaver.ti_paths[SDPromptSaver.ti_names.index(ti)]
 
         return ""
+
+    @staticmethod
+    def unpack_singleton(arr: list):
+        return arr[0] if len(arr) == 1 else arr
 
 
 class SDParameterGenerator:
@@ -816,9 +878,6 @@ class SDParameterGenerator:
         output_vae=True,
         output_clip=True,
     ):
-        if ckpt_name not in SDParameterGenerator.ckpt_list:
-            raise FileNotFoundError(f"Invalid ckpt_name: {ckpt_name}")
-
         ckpt_path = folder_paths.get_full_path("checkpoints", ckpt_name)
         if config_name != "none":
             config_path = folder_paths.get_full_path("configs", config_name)
