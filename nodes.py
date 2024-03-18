@@ -716,6 +716,7 @@ class SDParameterGenerator:
         "SDXL 1x": 2.0,
         "SDXL 1.1x": 2.2,
         "SDXL 1.25x": 2.5,
+        "SDXL 1.38x": 2.75,
         "SDXL 1.5x": 3.0,
     }
 
@@ -733,6 +734,8 @@ class SDParameterGenerator:
                 f"{int(x[1][1] * scaling_factor['SDXL 1.1x'])}"
                 f"{int(x[1][0] * scaling_factor['SDXL 1.25x'])}x"
                 f"{int(x[1][1] * scaling_factor['SDXL 1.25x'])}"
+                f"{int(x[1][0] * scaling_factor['SDXL 1.38x'])}x"
+                f"{int(x[1][1] * scaling_factor['SDXL 1.38x'])}"
                 f"{int(x[1][0] * scaling_factor['SDXL 1.5x'])}x"
                 f"{int(x[1][1] * scaling_factor['SDXL 1.5x'])}"
             ),
