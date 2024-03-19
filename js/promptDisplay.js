@@ -14,8 +14,8 @@ app.registerExtension({
 
                 // Create prompt and setting widgets
                 const styles = {opacity: 0.7}
-                const positive = createTextWidget(app, this, "positive", styles);
-                const negative = createTextWidget(app, this, "negative", styles);
+//                const positive = createTextWidget(app, this, "positive", styles);
+//                const negative = createTextWidget(app, this, "negative", styles);
                 const setting = createTextWidget(app, this, "setting", styles);
                 // Resize the node
                 const nodeWidth = this.size[0];
@@ -28,8 +28,8 @@ app.registerExtension({
             const onExecuted = nodeType.prototype.onExecuted;
             nodeType.prototype.onExecuted = function (message) {
                 onExecuted?.apply(this, arguments);
-                this.widgets.find(obj => obj.name === "positive").value = message.text[0];
-                this.widgets.find(obj => obj.name === "negative").value = message.text[1];
+//                this.widgets.find(obj => obj.name === "positive").value = message.text[0];
+//                this.widgets.find(obj => obj.name === "negative").value = message.text[1];
                 this.widgets.find(obj => obj.name === "setting").value = message.text[2];
             };
         }
