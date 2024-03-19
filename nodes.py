@@ -11,6 +11,7 @@ from datetime import datetime
 from itertools import chain
 
 import torch
+import random
 import json
 import re
 import numpy as np
@@ -71,6 +72,245 @@ class AnyType(str):
 
 any_type = AnyType("*")
 
+
+class SDPromptReaderRandom:
+    files = []
+    ckpt_paths = []
+    ckpt_names = []
+    ckpt_stems = []
+    last_index = -1
+
+    @classmethod
+    def INPUT_TYPES(s):
+        for path in folder_paths.get_filename_list("checkpoints"):
+            SDPromptReaderRandom.ckpt_paths.append(path)
+            SDPromptReaderRandom.ckpt_names.append(Path(path).name)
+            SDPromptReaderRandom.ckpt_stems.append(Path(path).stem)
+
+        return {
+            "required": {
+                "folder": (
+                    "STRING",
+                    {"default": "", "multiline": False, "forceInput": False},
+                ),
+                "increment": (["enable", "disable"],)
+            },
+            "optional": {
+                "parameter_index": (
+                    "INT",
+                    {"default": 0, "min": 0, "max": 255, "step": 1},
+                ),
+                "image_index": (
+                    "INT",
+                    {"default": 0, "min": 0, "max": 25500, "step": 1},
+                ),
+            },
+        }
+
+    RETURN_TYPES = (
+        "IMAGE",
+        "MASK",
+        "STRING",
+        "STRING",
+        "INT",
+        "INT",
+        "FLOAT",
+        "INT",
+        "INT",
+        any_type,
+        "STRING",
+        "STRING",
+        "INT",
+    )
+    RETURN_NAMES = (
+        "IMAGE",
+        "MASK",
+        "POSITIVE",
+        "NEGATIVE",
+        "SEED",
+        "STEPS",
+        "CFG",
+        "WIDTH",
+        "HEIGHT",
+        "MODEL_NAME",
+        "FILENAME",
+        "SETTINGS",
+        "IMAGE_INDEX"
+    )
+
+    FUNCTION = "load_image"
+    CATEGORY = "SD Prompt Reader"
+    OUTPUT_NODE = True
+
+    def load_image(self, folder, parameter_index, image_index, increment):
+        SDPromptReaderRandom.files = sorted(
+            [
+                f
+                for f in os.listdir(folder)
+                if os.path.isfile(os.path.join(folder, f))
+            ]
+        )
+
+        max_index = len(SDPromptReaderRandom.files)-1
+        if increment == 'enable' and SDPromptReaderRandom.last_index != -1:
+            image_index = (SDPromptReaderRandom.last_index + 1) % max_index
+        elif image_index == -1:
+            image_index = random.randint(0,max_index)
+
+        SDPromptReaderRandom.last_index = image_index
+        image_path = os.path.join(folder, SDPromptReaderRandom.files[image_index])
+        i = Image.open(image_path)
+        i = ImageOps.exif_transpose(i)
+        image = i.convert("RGB")
+        image = np.array(image).astype(np.float32) / 255.0
+        image = torch.from_numpy(image)[None,]
+        if "A" in i.getbands():
+            mask = np.array(i.getchannel("A")).astype(np.float32) / 255.0
+            mask = 1.0 - torch.from_numpy(mask)
+        else:
+            mask = torch.zeros((64, 64), dtype=torch.float32, device="cpu")
+
+        file_path = Path(image_path)
+
+        with open(file_path, "rb") as f:
+            try:
+                image_data = ImageDataReader(f)
+            except:
+                output_to_terminal(ERROR_MESSAGE["complex_workflow"])
+                return self.error_output(
+                    error_message=ERROR_MESSAGE["complex_workflow"],
+                    image=image,
+                    mask=mask,
+                    width=i.width,
+                    height=i.height,
+                    filename=file_path.stem,
+                )
+
+            if not image_data.tool:
+                output_to_terminal(ERROR_MESSAGE["format_error"])
+                return self.error_output(
+                    error_message=ERROR_MESSAGE["format_error"],
+                    image=image,
+                    mask=mask,
+                    width=i.width,
+                    height=i.height,
+                    filename=file_path.stem,
+                )
+
+            seed = int(
+                self.param_parser(image_data.parameter.get("seed", 0), parameter_index)
+                or 0
+            )
+            steps = int(
+                self.param_parser(image_data.parameter.get("steps", 0), parameter_index)
+                or 0
+            )
+            cfg = float(
+                self.param_parser(image_data.parameter.get("cfg", 0), parameter_index)
+                or 0
+            )
+            model = str(
+                self.param_parser(
+                    image_data.parameter.get("model", ""), parameter_index
+                )
+                or ""
+            )
+            width = int(image_data.width or 0)
+            height = int(image_data.height or 0)
+
+            output_to_terminal("Positive: \n" + image_data.positive)
+            output_to_terminal("Negative: \n" + image_data.negative)
+            output_to_terminal("Setting: \n" + image_data.setting)
+
+            model = self.search_model(model)
+
+        return {
+            "ui": {
+                "text": (image_data.positive, image_data.negative, image_data.setting)
+            },
+            "result": (
+                image,
+                mask,
+                image_data.positive,
+                image_data.negative,
+                seed,
+                steps,
+                cfg,
+                width,
+                height,
+                model,
+                file_path.stem,
+                image_data.setting,
+                image_index
+            ),
+        }
+
+    @staticmethod
+    def param_parser(data: str, index: int):
+        try:
+            data_list = data.strip("()").split(",")
+        except AttributeError:
+            return None
+        else:
+            return data_list[0] if len(data_list) == 1 else data_list[index]
+
+    @staticmethod
+    def search_model(model: str):
+        if not model or model in SDPromptReaderRandom.ckpt_paths:
+            return model
+
+        model_path = Path(model)
+        model_name = model_path.name
+        model_stem = model_path.stem
+
+        if model_name in SDPromptReaderRandom.ckpt_names:
+            return SDPromptReaderRandom.ckpt_paths[
+                SDPromptReaderRandom.ckpt_names.index(model_name)
+            ]
+
+        if model_stem in SDPromptReaderRandom.ckpt_stems:
+            return SDPromptReaderRandom.ckpt_paths[
+                SDPromptReaderRandom.ckpt_stems.index(model_stem)
+            ]
+
+        return model
+
+    @staticmethod
+    def error_output(
+        error_message, image=None, mask=None, width=0, height=0, filename=""
+    ):
+        return {
+            "ui": {"text": ("", "", error_message)},
+            "result": (
+                image,
+                mask,
+                "",
+                "",
+                0,
+                0,
+                0.0,
+                width,
+                height,
+                "",
+                filename,
+                "",
+            ),
+        }
+
+    @classmethod
+    def IS_CHANGED(s, folder, parameter_index, image_index):
+        if image_index == -1:
+            image_index = random.randint(0,len(SDPromptReaderRandom.files)-1)
+
+        image_path = os.path.join(folder, SDPromptReaderRandom.files[image_index])
+
+        with open(Path(image_path), "rb") as f:
+            image_data = ImageDataReader(f)
+        return image_data.props
+
+    @classmethod
+    def VALIDATE_INPUTS(s, folder):
+        return True
 
 class SDPromptReader:
     files = []
@@ -295,7 +535,6 @@ class SDPromptReader:
     @classmethod
     def VALIDATE_INPUTS(s, image):
         return True
-
 
 class SDPromptSaver:
     model_hash_dict = {}
@@ -1309,6 +1548,7 @@ class SDLoraSelector:
 
 
 NODE_CLASS_MAPPINGS = {
+    "SDPromptReaderRandom": SDPromptReaderRandom,
     "SDPromptReader": SDPromptReader,
     "SDPromptSaver": SDPromptSaver,
     "SDParameterGenerator": SDParameterGenerator,
@@ -1321,6 +1561,7 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
+    "SDPromptReaderRandom": "SD Prompt Reader Random",
     "SDPromptReader": "SD Prompt Reader",
     "SDPromptSaver": "SD Prompt Saver",
     "SDParameterGenerator": "SD Parameter Generator",
