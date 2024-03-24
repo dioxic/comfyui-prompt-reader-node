@@ -689,6 +689,8 @@ class SDPromptSaver:
 
             extra_info_real = f", Extra info: {extra_info}" if extra_info else ""
 
+            prompt_hash = hash(positive) % 10000
+
             variable_map = {
                 "%date": self.get_time(date_format),
                 "%time": self.get_time(time_format),
@@ -700,6 +702,7 @@ class SDPromptSaver:
                 "%sampler": sampler_name_real,
                 "%scheduler": scheduler_real,
                 "%quality": jpg_webp_quality,
+                "%prompt_hash": prompt_hash
             }
 
             subfolder = self.get_path(path, variable_map)
