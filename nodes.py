@@ -911,13 +911,13 @@ class SDPromptSaver:
 
     @staticmethod
     def get_unique_filename(stem: Path, extension: str, output_folder: Path):
-        file = stem.with_suffix(f".{extension}")
+        file = stem.with_suffix(f"{stem.suffix}.{extension}")
         index = 0
 
         while (output_folder / file).exists():
             index += 1
-            new_stem = f"{stem}_{index}"
-            file = Path(new_stem).with_suffix(f".{extension}")
+            new_stem = Path(f"{stem}_{index}")
+            file = new_stem.with_suffix(f"{new_stem.suffix}.{extension}")
 
         return file
 
@@ -1294,6 +1294,30 @@ class SDTypeConverter:
         )
 
 
+class SDAnyConverter:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {},
+            "optional": {
+                "any_type_input": (
+                    any_type,
+                    {"forceInput": True},
+                ),
+            },
+        }
+
+    RETURN_TYPES = (any_type,)
+
+    RETURN_NAMES = ("ANY_TYPE_OUTPUT",)
+
+    FUNCTION = "convert_any"
+    CATEGORY = "SD Prompt Reader"
+
+    def convert_any(self, any_type_input: str = ""):
+        return (any_type_input,)
+
+
 class SDBatchLoader:
     @classmethod
     def INPUT_TYPES(s):
@@ -1557,6 +1581,7 @@ NODE_CLASS_MAPPINGS = {
     "SDParameterGenerator": SDParameterGenerator,
     "SDPromptMerger": SDPromptMerger,
     "SDTypeConverter": SDTypeConverter,
+    "SDAnyConverter": SDAnyConverter,
     "SDBatchLoader": SDBatchLoader,
     "SDParameterExtractor": SDParameterExtractor,
     "SDLoraLoader": SDLoraLoader,
@@ -1570,6 +1595,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "SDParameterGenerator": "SD Parameter Generator",
     "SDPromptMerger": "SD Prompt Merger",
     "SDTypeConverter": "SD Type Converter",
+    "SDAnyConverter": "SD Any Converter",
     "SDBatchLoader": "SD Batch Loader",
     "SDParameterExtractor": "SD Parameter Extractor",
     "SDLoraLoader": "SD Lora Loader",
